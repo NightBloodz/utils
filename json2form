@@ -1,0 +1,85 @@
+#!/usr/bin/env python
+
+import json
+from urllib.parse import quote, quote_plus
+import sys
+import os
+import argparse
+
+
+parser = argparse.ArgumentParser(
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    description='''
+    JSON to URL-encoded form converter.
+    If neither --object nor --file is given,
+    the JSON object is read from standard input.''')
+input_parser = parser.add_mutually_exclusive_group()
+input_parser.add_argument(
+    '--object', '-o', dest='obj',
+    help='JSON object to parse.')
+input_parser.add_argument(
+    '--file', '-f', dest='file',
+    help='JSON file to parse.')
+parser.add_argument(
+    '--no-plus', dest='quoter',
+    action='store_const', const=quote, default=quote_plus,
+    help='Encode a space with %%20 instead of +.')
+parser.add_argument(
+    '--safe', '-s', dest='safe',
+    help='Safe characters to skip encoding.')
+args = parser.parse_args()
+
+
+if args.file is not None:
+    with open(args.file, 'r') as f:
+        data_s = f.read()
+elif args.obj is not None:
+    data_s = args.obj
+else:
+    # read JSON data from stdin
+    data_s = ''
+    while True:
+        line = sys.stdin.readline()
+        if not line.strip(' \r\n'):
+            break
+        data_s += line
+
+if not data_s:
+    sys.exit(0)
+
+data_dec = json.loads(data_s)
+
+
+def JSON_to_URL_encode(value, key=None):
+    def quot(v, **kargs):
+        if v is None:
+            return ''
+        if args.safe is not None:
+            safe = kargs.pop('safe', '') + args.safe
+            kargs['safe'] = safe
+        return args.quoter('{!s}'.format(v), **kargs)
+
+    def enc(k, v):
+        return '{}={}'.format(quot(k, safe='[]'), quot(v))
+
+    if isinstance(value, dict):
+        iterator = value.items()
+    elif isinstance(value, list):
+        iterator = enumerate(value)
+    elif key is None:
+        # top level object was neither list nor dictionary
+        raise TypeError('Only lists and dictionaries supported')
+    else:
+        return enc(key, value)
+
+    res_l = []
+    for k, v in iterator:
+        if key is None:
+            this_key = k
+        else:
+            this_key = '{}[{}]'.format(key, k)
+        res_l.append(JSON_to_URL_encode(v, key=this_key))
+    return '&'.join(res_l)
+
+
+print(JSON_to_URL_encode(data_dec))
