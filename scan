@@ -1,8 +1,10 @@
 #!/usr/bin/env python
-import requests, re, json, base64, html, random, sys, time, copy, os
+import requests, re, json, base64, html, random, sys, time, copy, os, threading, argparse
 from bs4 import BeautifulSoup
 from pwn import log
 import jsbeautifier
+
+
 
 
 
@@ -50,32 +52,22 @@ def user_agent():
     ]
     user_agent = random.choice(user_agent_list)
     return user_agent
+###################################################################################################
 
 
-def scrap(link, content, js=False):
+def scrap(content, js=False):
     
-    
-    
+    #If the file contains javascript, beautify it.    
     if js:
-            
-        
         if len(content) > 1000000:
-            print("getting js file "+link)
             content = content.replace(";",";\r\n").replace(",",",\r\n")
         else:
             #Beautify 
             content = jsbeautifier.beautify(content)
-            print("getting js file beaufify "+link)
             
-      
-       
-        filename = "js/" + os.path.basename(link)
-        with open(filename, "w") as js_file:
-            js_file.write(content)
-                
+  
         
-        
-
+    #Find urls on the file
     regex = re.compile(regex_str, re.VERBOSE)
     for m in re.finditer(regex, content):
         if m.group(1) not in links["full_urls"] and m.group(1) is not None:
@@ -87,9 +79,30 @@ def scrap(link, content, js=False):
         if m.group(4) not in links["relative_with_ext"] and m.group(4) is not None:
             links["relative_with_ext"].append(m.group(4))
 
-   
-    with open("data.json", "w") as file:
-        json.dump(links, file)
+    return links
+
+#########################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 links = {
@@ -103,59 +116,33 @@ if os.path.isfile("data.json"):
         links = json.load(file)
         
 
-if __name__ == "__main__":
-    
-    url = sys.argv[1]
-    
-    cookies = {}
-    if len(sys.argv) == 3:
-        cookies = json.loads(sys.argv[2])
-        
 
-    
-    
-    content = requests.get(url, headers={"User-Agent": user_agent()}, cookies=cookies).text    
-    scrap(url, content, js=False)
-    
-    s = log.progress(f"Scanning {url}")
-    
-    scanned = 0
-    links2scan = copy.deepcopy(links["endpoint"])
-    #Scrap the adquired endpoints
-    for link in links2scan:
-        if len(links2scan) > 1000:
-            continue
-        scanned += 1
+#Check args
+parser = argparse.ArgumentParser()
+parser.add_argument("-t", "--target", type=str, help="Url to scan", required=True)
+parser.add_argument("-c", "--cookies", nargs='+', type=str, help="Set the cookies using this format cookie=value", required=False, default=False)
+args = parser.parse_args()
+
+url = args.target
+
+cookies = {}
+if args.cookies:
+    for cookie in args.cookies:
+        cookie = cookie.split("=")
+        cookies[cookie[0]] = cookie[1]
+#####################
+
         
-        try:
-            resp = requests.get(url+link, headers={"User-Agent": user_agent()}, cookies=cookies, timeout=1)
-            content2 = resp.text
-        except:
-            continue
+          
         
-        js = False
-        if "javascript" in resp.headers["Content-Type"].lower() or link.endswith(".js") or ".js?" in link:
-            js = True
-            
-        
-        scrap(link, content2, js)
-    
-        s.status(f"{scanned}/{len(links2scan)}")
-    
+     
+
+
+
+if __name__ == "__main__":
+     
+    content = requests.get(url, cookies=cookies, headers={"User-Agent":user_agent()}).content
     
     
     
-    links2scan = copy.deepcopy(links["full_urls"])
-    for link in links2scan:
-        if link.endswith(".js") or ".js?" in link or link.endswith(".map"):
-            if "http" not in link:
-                link = "https:"+link
-                
-            try:    
-                response = requests.get(link, headers={"User-Agent": user_agent()}, cookies=cookies).text
-                scrap(link, response, js=True)       
-                
-            except:
-                continue
-    
-    
+  
