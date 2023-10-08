@@ -1,8 +1,13 @@
 #!/usr/bin/env python
 import requests, re, json, base64, html, random, sys, time, copy, os, argparse
 import jsbeautifier
-import xml.etree.ElementTree as ET
+
 import httpsuite
+
+
+
+
+
 
 
 regex_str = r"""
@@ -35,8 +40,68 @@ regex_str = r"""
 
 
 
+regex_secrets = {
+        'facebook_access_token' : r'EAACEdEose0cBA[0-9A-Za-z]+',
+    	'authorization_basic' : r'basic [a-zA-Z0-9=:_\+\/-]{5,100}',
+    	'authorization_bearer' : r'bearer [a-zA-Z0-9_\-\.=:_\+\/]{5,100}',
+    	'authorization_api' : r'api[key|_key|\s+]+[a-zA-Z0-9_\-]{5,100}',
+		'json_web_token' : r'ey[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$',
+        "base64":"(eyJ|YTo|Tzo|PD[89]|aHR0cHM6L|aHR0cDo|rO0)[a-zA-Z0-9+/]+={0,2}",
+        "md5":"[a-f0-9]{32}",
+        "ipv4":"\b(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}\b",
+        "ipv6":"(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))",
+    	"Cloudinary"  : "cloudinary://.*",
+	    "Firebase URL": ".*firebaseio\.com",
+	    "Slack Token": "(xox[p|b|o|a]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32})",
+    	"RSA private key": "-----BEGIN RSA PRIVATE KEY-----",
+    	"SSH (DSA) private key": "-----BEGIN DSA PRIVATE KEY-----",
+    	"SSH (EC) private key": "-----BEGIN EC PRIVATE KEY-----",
+    	"PGP private key block": "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+    	"Amazon AWS Access Key ID": "AKIA[0-9A-Z]{16}",
+    	"Amazon MWS Auth Token": "amzn\\.mws\\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    	"AWS API Key": "AKIA[0-9A-Z]{16}",
+    	"Facebook Access Token": "EAACEdEose0cBA[0-9A-Za-z]+",
+    	"Facebook OAuth": "[f|F][a|A][c|C][e|E][b|B][o|O][o|O][k|K].*['|\"][0-9a-f]{32}['|\"]",
+    	"GitHub": "[g|G][i|I][t|T][h|H][u|U][b|B].*['|\"][0-9a-zA-Z]{35,40}['|\"]",
+    	"Generic API Key": "[a|A][p|P][i|I][_]?[k|K][e|E][y|Y].*['|\"][0-9a-zA-Z]{32,45}['|\"]",
+    	"Generic Secret": "[s|S][e|E][c|C][r|R][e|E][t|T].*['|\"][0-9a-zA-Z]{32,45}['|\"]",
+    	"Google API Key": "AIza[0-9A-Za-z\\-_]{35}",
+    	"Google Cloud Platform API Key": "AIza[0-9A-Za-z\\-_]{35}",
+    	"Google Cloud Platform OAuth": "[0-9]+-[0-9A-Za-z_]{32}\\.apps\\.googleusercontent\\.com",
+    	"Google Drive API Key": "AIza[0-9A-Za-z\\-_]{35}",
+    	"Google Drive OAuth": "[0-9]+-[0-9A-Za-z_]{32}\\.apps\\.googleusercontent\\.com",
+    	"Google (GCP) Service-account": "\"type\": \"service_account\"",
+    	"Google Gmail API Key": "AIza[0-9A-Za-z\\-_]{35}",
+    	"Google Gmail OAuth": "[0-9]+-[0-9A-Za-z_]{32}\\.apps\\.googleusercontent\\.com",
+    	"Google OAuth Access Token": "ya29\\.[0-9A-Za-z\\-_]+",
+    	"Google YouTube API Key": "AIza[0-9A-Za-z\\-_]{35}",
+    	"Google YouTube OAuth": "[0-9]+-[0-9A-Za-z_]{32}\\.apps\\.googleusercontent\\.com",
+    	"Heroku API Key": "[h|H][e|E][r|R][o|O][k|K][u|U].*[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}",
+    	"MailChimp API Key": "[0-9a-f]{32}-us[0-9]{1,2}",
+    	"Mailgun API Key": "key-[0-9a-zA-Z]{32}",
+    	"Password in URL": "[a-zA-Z]{3,10}://[^/\\s:@]{3,20}:[^/\\s:@]{3,20}@.{1,100}[\"'\\s]",
+    	"PayPal Braintree Access Token": "access_token\\$production\\$[0-9a-z]{16}\\$[0-9a-f]{32}",
+    	"Picatic API Key": "sk_live_[0-9a-z]{32}",
+    	"Slack Webhook": "https://hooks.slack.com/services/T[a-zA-Z0-9_]{8}/B[a-zA-Z0-9_]{8}/[a-zA-Z0-9_]{24}",
+    	"Stripe API Key": "sk_live_[0-9a-zA-Z]{24}",
+    	"Stripe Restricted API Key": "rk_live_[0-9a-zA-Z]{24}",
+    	"Square Access Token": "sq0atp-[0-9A-Za-z\\-_]{22}",
+    	"Square OAuth Secret": "sq0csp-[0-9A-Za-z\\-_]{43}",
+    	"Twilio API Key": "SK[0-9a-fA-F]{32}",
+    	"Twitter Access Token": "[t|T][w|W][i|I][t|T][t|T][e|E][r|R].*[1-9][0-9]+-[0-9a-zA-Z]{40}",
+    	"Twitter OAuth": "[t|T][w|W][i|I][t|T][t|T][e|E][r|R].*['|\"][0-9a-zA-Z]{35,44}['|\"]"
+}
 
 
+
+def find_secrets(content, regex_dict=regex_secrets):
+    matches = {}
+    for key, regex in regex_dict.items():
+        regex = re.compile(regex, re.VERBOSE)
+        matches[key] = [match.group() for match in re.finditer(regex, content)]
+    return matches
+
+    
 def get_urls(content):
     #Find urls on the file
     
@@ -62,58 +127,86 @@ parser.add_argument("filename")
 
 args = parser.parse_args()
 
-tree = ET.parse(args.filename)
-root = tree.getroot()
+root = json.load(open(args.filename,"r"))
 
-
-links ={
+matches = {}
+links = {
     "full_urls":[],
     "path_trv":[],
     "endpoint":[],
     "relative_with_ext":[]
-    
 }
 if __name__ == '__main__':
    
     
     for conn in root:
         try:    
-            url = conn[1].text
-            host = conn[2].text
-            port = conn[3].text
-            protocol = conn[4].text
-            method = conn[5].text
-            path = conn[6].text
-            extension = conn[7].text
-            request = base64.b64decode(conn[8].text)
-            status_code = conn[9].text
-            length = conn[10].text
-            response = base64.b64decode(conn[12].text)
+            path = conn["path"]
+            request = base64.b64decode(conn["raw"]).decode("utf-8")
             
-            if extension in ["webp", "png", "jpg", "jpeg", "ico", "svg"]:
-                continue    
+            response = base64.b64decode(conn["response"]["raw"]).decode("utf-8")
+        except Exception as e:
+            print("parser error. -->"+str(e))
+            continue
+            
+        for extension in [".webp", ".png", ".jpg", ".jpeg", ".ico", ".svg"]:
+            if extension in path:
+                continue
 
+        
+        
+        get_urls(request)
+        for key, values in find_secrets(content=request).items():
+            if key not in matches:
+                matches[key] = values
+            else:
+                for value in values:
+                    if value not in matches[key]:
+                        matches[key].append(value)
+        
+        
+        get_urls(response)
+        for key, values in find_secrets(content=request).items():
+            if key not in matches:
+                matches[key] = values
+            else:
+                for value in values:
+                    if value not in matches[key]:
+                        matches[key].append(value)
+                
+
+        
+        
+        
+        """
+        try:
+            request = httpsuite.Request.parse(request)
+            get_urls(req_body)
+        except Exception as e:
+            print("Parsing request error.")
             
-            
+        
+        try:         
             response = httpsuite.Response.parse(response)
             
-            
-            
+            req_body = str(request.body)
             body = str(response.body)
             if "Content-Type" in response.headers:
                 if response.headers["Content-Type"] == "text/javascript":
                     body = jsbeautifier.beautify(str(response.body))
             
-            
-            
-            
-            
             get_urls(body)
         except Exception as e:
-            continue
+            print("Parsing response error --> "+str(e))
+        """
+          
+            
+        
             
        
-    
+    with open("secrets.json", "w") as file:
+        json.dump(matches, file, indent=3)
+
     with open("links.json", "w") as file:
         json.dump(links, file, indent=3)
         

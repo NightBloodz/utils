@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+import json
+import argparse
+from urllib.parse import parse_qs
+
+def x_www_form_urlencoded_to_json(encoded_data):
+    try:
+        # Parse the x-www-urlencoded data
+        parsed_data = parse_qs(encoded_data)
+
+        # Convert the parsed data to a JSON object
+        json_data = json.dumps(parsed_data)
+
+        return json_data
+    except Exception as e:
+        print("Error converting data:", e)
+        return None
+
+def main():
+    parser = argparse.ArgumentParser(description="Convert x-www-urlencoded data to JSON.")
+    parser.add_argument("data", help="x-www-urlencoded data to convert")
+
+    args = parser.parse_args()
+
+    # Convert to JSON
+    result_json = x_www_form_urlencoded_to_json(args.data)
+    if result_json is not None:
+        print(result_json)
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
