@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import requests, re, json, base64, html, random, sys, time, copy, os, argparse
-import jsbeautifier
+import jsbe
 
+import httpsuite
 
 
 
